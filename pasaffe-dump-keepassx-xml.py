@@ -2,8 +2,9 @@
 # -*- Mode: Python; coding: utf-8; indent-tabs-mode: nil; tab-width: 4 -*-
 # Converts Pasaffe DB format to KeePassX XML.
 ### BEGIN LICENSE
-# Copyright (C) 2014 Leandro Lucarella <llucax@gmail.com>
-# Based on work by Jamie Strandboge <jamie@canonical.com> which was
+# Copyright (C) 2017 Javier Marcon <javiermarcon@gmail.com>
+# Based on work by Leandro Lucarella <llucax@gmail.com> which was
+# based on work by Jamie Strandboge <jamie@canonical.com> which was
 # based on work by Marc Deslauriers <marc.deslauriers@canonical.com>
 #
 # This program is free software: you can redistribute it and/or modify it
@@ -58,10 +59,10 @@ parser.add_option("-f", "--file", dest="filename",
 
 (options, args) = parser.parse_args()
 
-if os.environ.has_key('XDG_DATA_HOME'):
-    db_filename = os.path.join(os.environ['XDG_DATA_HOME'], 'pasaffe/pasaffe.psafe3')
-else:
-    db_filename = os.path.join(os.environ['HOME'], '.local/share/pasaffe/pasaffe.psafe3')
+#if os.environ.has_key('XDG_DATA_HOME'):
+#    db_filename = os.path.join(os.environ['XDG_DATA_HOME'], 'pasaffe/pasaffe.psafe3')
+#else:
+db_filename = os.path.join(os.environ['HOME'], '.local/share/pasaffe/pasaffe.psafe3')
 
 if options.filename != None:
     db_filename = options.filename
@@ -87,23 +88,44 @@ while count < max_tries:
         sys.stderr.write("%d incorrect password attempts.\n" % (count))
         sys.exit(1)
 
-db = et.Element('database')
-grp = et.SubElement(db, 'group')
-et.SubElement(grp, 'title').text = 'Pasaffe'
-et.SubElement(grp, 'icon').text = '51'
 
+db = et.Element('database')
+#grp = et.SubElement(db, 'group')
+#et.SubElement(grp, 'title').text = 'Pasaffe'
+#et.SubElement(grp, 'icon').text = '51'
+
+# creo las carpetas para los elementos
+folders = sorted(passfile.get_all_folders())
+categorias = {}
+for folder in folders:
+    if len(folder) == 1:
+        grp = et.SubElement(db, 'group')
+    else:
+        anterior = tuple(folder[:-1])
+        grp = et.SubElement(categorias[anterior], 'group')
+    et.SubElement(grp, 'title').text = folder[-1]
+    et.SubElement(grp, 'icon').text = '51'
+    tupfol = tuple(folder)
+    categorias[tupfol] = grp
+    
+
+# agrego los 
 for record in sorted(passfile.records, key=lambda entry: entry[3].lower()):
     def field(label, default=''):
         d = dict(
+            folder   = 2,
             title    = 3,
             username = 4,
             comment  = 5,
             password = 6,
             url      = 13, # a lock
         )
-        return record.get(d[label], default).decode('UTF-8')
+        print (record)
+        return str(passfile.records[record].get(d[label], default)) #.decode('UTF-8')
 
-    entry = et.SubElement(grp, 'entry')
+    pare = tuple(passfile._field_to_folder_list(field('folder')))
+    gr = categorias[pare]
+    entry = et.SubElement(gr, 'entry')
     et.SubElement(entry, 'title').text = field('title') or field('url')
     et.SubElement(entry, 'username').text = field('username')
     et.SubElement(entry, 'password').text = field('password')
@@ -115,6 +137,9 @@ for record in sorted(passfile.records, key=lambda entry: entry[3].lower()):
         et.SubElement(entry, n).text = now
     et.SubElement(entry, 'expire').text = 'Never'
 
-sys.stdout.write('<!DOCTYPE KEEPASSX_DATABASE>\n')
+fi = open("out.xml", "wb")
+fi.write(b'<!DOCTYPE KEEPASSX_DATABASE>\n')
 xml_tree = et.ElementTree(db)
-xml_tree.write(sys.stdout, xml_declaration=False, encoding='UTF-8')
+xml_tree.write(fi, xml_declaration=False, encoding='UTF-8')
+fi.close()
+
